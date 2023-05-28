@@ -1,0 +1,8 @@
+numpy>=1.18.1
+
+# agrobrain_util>=1.9.78,<2.0.0
+
+agrobrain_util>=1.10.81,<2.0.0
+
+
+agrobrain_apis
