@@ -1,0 +1,13 @@
+
+
+{
+		"name": "Existing Dockerfile",
+		"extensions": ["ms-python.python"],
+		"runArgs": ["--env-file=c:\\Users\\Anafa\\repositories\\secrets.txt"],
+		"postCreateCommand": "apt-get update && apt-get install -y git",
+		"build": {
+			"context": "..",
+			"dockerfile": "../Dockerfile",
+			"FURY_TOKEN": "18EwqG-B0sMUHEEwAb7x48rDb7MxAhX5hQ"
+		}
+}
