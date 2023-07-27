@@ -115,7 +115,8 @@ if __name__ == "__main__":
     # TASK_NAME = 'anafa_2023_06_07_wide_full_filtered'
     # DATASET_NAME = "anafa_2023_07_06_wide_full_ttt_filtered"
     # DATASET_NAME = "anafa_2023_06_27_wide_images_first_tagging_task"
-    DATASET_NAME = "Anafa_second"
+    # DATASET_NAME = "anafa_2023_07_17_infestation_21_images"
+    DATASET_NAME = "anafa_tagging_methodology_1000_images_2023_07_24"
 
     # TASK_NAME = 'anafa_2023_06_27_wide_images_first_tagging_task'
 
