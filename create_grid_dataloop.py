@@ -89,9 +89,12 @@ def get_grid_coords(image_shape):
 
 
 
-def add_boxes_coords(items_df, image_shape, num_boxes=10, grid_shape=(507, 434)):
+def add_boxes_coords(items_df, image_shape, num_boxes=None, grid_shape=(507, 434)):
     grid_coords = get_grid_coords(image_shape)
-    items_df['boxes_coords'] = [grid_coords.sample(n=10).reset_index(drop=True) for i in range(len(items_df))]
+    if num_boxes == None:
+        items_df['boxes_coords'] = [grid_coords.reset_index(drop=True) for i in range(len(items_df))]
+    else:
+        items_df['boxes_coords'] = [grid_coords.sample(n=num_boxes).reset_index(drop=True) for i in range(len(items_df))]
     return items_df
 
 
@@ -116,7 +119,7 @@ if __name__ == "__main__":
     # DATASET_NAME = "anafa_2023_07_06_wide_full_ttt_filtered"
     # DATASET_NAME = "anafa_2023_06_27_wide_images_first_tagging_task"
     # DATASET_NAME = "anafa_2023_07_17_infestation_21_images"
-    DATASET_NAME = "anafa_tagging_methodology_1000_images_2023_07_24"
+    DATASET_NAME = "anafa_tmp_2023_08_02"
 
     # TASK_NAME = 'anafa_2023_06_27_wide_images_first_tagging_task'
 
@@ -131,7 +134,7 @@ if __name__ == "__main__":
 
     image_shape = get_image_shape(example_image_id = items_df['name'][0].replace(".jpg", ""))[:-1]
 
-    items_df = add_boxes_coords(items_df, image_shape).reset_index(drop=True)
+    items_df = add_boxes_coords(items_df, image_shape, num_boxes = 10).reset_index(drop=True)
 
     add_boxes_annotation_dataloop(items_df)
 

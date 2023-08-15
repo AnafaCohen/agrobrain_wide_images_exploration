@@ -39,7 +39,7 @@ if dl.token_expired():
 
 
 
-def download_datasets_annotations_from_dataloop(dataset_name, task_name, version):
+def download_datasets_annotations_from_dataloop(dataset_name, task_name="None", version=0):
     dataloop_local_data_dir = os.path.join(DATA_DIR, f"dataloop")
     annotation_local_path = os.path.join(dataloop_local_data_dir, f"annotations_{dataset_name}_task_{task_name}_v{version}")
     dataset = project.datasets.get(dataset_name=dataset_name)
@@ -47,7 +47,7 @@ def download_datasets_annotations_from_dataloop(dataset_name, task_name, version
     print(f"Done downloading annotations for the dataset: {dataset_name}.\n Local path: {annotation_local_path}")
 
 
-def get_jsons_paths_list(dataset_name, task_name, version, sub_folder=""):
+def get_jsons_paths_list(dataset_name, task_name="None", version=0, sub_folder=""):
     dataloop_local_data_dir = os.path.join(DATA_DIR, f"dataloop")
     annotation_local_path = os.path.join(dataloop_local_data_dir, f"annotations_{dataset_name}_task_{task_name}_v{version}")
     if sub_folder=="":
@@ -319,129 +319,18 @@ if __name__ == "__main__":
 
     # DOWNLOAD ANNOTATIONS
 
-    # POINT TAGS
-
-    # POINTS_DATASET_NAME = "anafa_2023_07_12_resolution_lim_5_res_20_images"
-    # POINTS_TASK_NAME = 'anafa_2023_07_12_resolution_lim_5_res_20_images'
-    # POINTS_VERSION = 0
-
-    POINTS_DATASET_NAME = "anafa_2023_07_11_resolution_limitation_5_res"
-    POINTS_TASK_NAME = 'anafa_2023_07_11_resolution_limitation_5_res'
-    POINTS_VERSION = 0
-
-    # download_datasets_annotations_from_dataloop(POINTS_DATASET_NAME, POINTS_TASK_NAME, POINTS_VERSION)
-    points_jsons_paths_list = get_jsons_paths_list(POINTS_DATASET_NAME, POINTS_TASK_NAME, POINTS_VERSION, sub_folder="resized_images")
-    points_task = project.tasks.get(task_name=POINTS_TASK_NAME)
+    POINTS_DATASET_NAME = "anafa_2023_07_17_infestation_21_images"
 
 
-    # POLYGONS TAGS
+    download_datasets_annotations_from_dataloop(POINTS_DATASET_NAME)
+    points_jsons_paths_list = get_jsons_paths_list(POINTS_DATASET_NAME)
 
-    POLYGONS_DATASET_NAME = "anafa_2023_06_23_resolution_lim_dataset_1"
-    POLYGONS_TASK_NAME = 'anafa_2023_06_23_resolution_lim_first_task_01'
-    POLYGONS_VERSION = 0
-
-    # download_datasets_annotations_from_dataloop(POLYGONS_DATASET_NAME, POLYGONS_TASK_NAME, POLYGONS_VERSION)
-    polygons_jsons_paths_list = get_jsons_paths_list(POLYGONS_DATASET_NAME, POLYGONS_TASK_NAME, POLYGONS_VERSION)
-    polygons_task = project.tasks.get(task_name=POLYGONS_TASK_NAME)
-
-
-    points_task_image_ids_list = np.unique([int(os.path.basename(p).split("_")[0]) for p in points_jsons_paths_list])
-
-    problematic_images_list = [7851797, 8908805, 9104069, 9104165, 6238883, 6239082]
-    points_task_image_ids_list = points_task_image_ids_list[~np.isin(points_task_image_ids_list, problematic_images_list)]
-
-
-    filtered_polygons_jsons_paths_list = [elem for elem in polygons_jsons_paths_list if any(str(id_) in os.path.basename(elem) for id_ in points_task_image_ids_list)]
-
-    print(f"len points_jsons_paths_list:{len(points_jsons_paths_list)}, len polygons_jsons_paths_list: {len(polygons_jsons_paths_list)}, len filtered_polygons_jsons_paths_list: {len(filtered_polygons_jsons_paths_list)}")
-
-    # points_task_image_ids_list = [6580458, 9445268]
-    # points_task_image_ids_list = [9638024]
-
-    original_image_width, original_image_height = get_original_image_shape()
-    resolutions_list = get_resolutions_list_from_points_jsons(points_jsons_paths_list)
-
-    images_data = pd.read_csv(os.path.join(DATA_DIR, 'resolution_test', 'resolution_test_images_dataframe_1000_images_full_data_1.csv'))
-
-    polygons_df = pd.DataFrame()
-
-    points_df =pd.DataFrame()
-    points_counter = 0
-    for image_id in tqdm(points_task_image_ids_list):
-        print(image_id)
-
-        # POLYGONS
-        polygons_tags_json = [path for path in polygons_jsons_paths_list if str(image_id) in path][0]
-        with open(polygons_tags_json) as file:
-            polygons_json_data = json.load(file)
-
-        image_polygons_list, annotators = get_polygons_list_from_json_data(polygons_json_data)
-        image_data = images_data[images_data['imageID']==image_id]
-        image_polygons_df = create_polygons_df(image_polygons_list, image_id, annotators, image_data)
-
-        if len(image_polygons_df) == 0:
-            continue
-
-        for res in resolutions_list:
-            image_polygons_df[f'res_{res}'] = 0
-
-
-        # POINTS
-        points_tags_jsons_list = [path for path in points_jsons_paths_list if str(image_id) in path]
-        for points_tags_json in points_tags_jsons_list:
-            with open(points_tags_json) as file:
-                points_json_data = json.load(file)
-
-            resolution = float(os.path.basename(points_tags_json).replace(".json", "").split("_")[-1])
-            flight_height = int(os.path.basename(points_tags_json).replace(".json", "").split("_")[3])
-
-            # image_polygons_df[f'res_{resolution}'] = 0
-
-            width = points_json_data['metadata']['system']['width']
-            height = points_json_data['metadata']['system']['height']
-            width_factor = original_image_width / width
-            height_factor = original_image_height / height
-
-            for i in range(len(points_json_data['annotations'])):
-                points_counter += 1
-                x_value = int(points_json_data['annotations'][i]['coordinates']['x']) * width_factor
-                y_value = int(points_json_data['annotations'][i]['coordinates']['y']) * height_factor
-
-                shapely_point = Point(x_value, y_value)
-
-                is_included = np.any([poly.contains(shapely_point) for poly in image_polygons_df['poly_union']])
-                if is_included == False:
-                    distance_to_closest_polygon = min([shapely_point.distance(poly) for poly in image_polygons_df['poly_union']])
-                else:
-                    distance_to_closest_polygon = 0
-
-                point_data_dict = {'image_id': image_id,
-                                   'shapely_point': shapely_point,
-                                   'resolution': resolution,
-                                   'is_included': is_included,
-                                   'distance_to_closest_polygon': distance_to_closest_polygon}
-
-                point_df = pd.DataFrame(columns = ['image_id', 'shapely_point', 'resolution', 'is_included', 'distance_to_closest_polygon'])
-                point_df = point_df.append(point_data_dict, ignore_index=True)
-
-
-                matching_polygon = [poly for poly in image_polygons_df['poly_union'] if poly.contains(shapely_point)]
-                for index, row in image_polygons_df.iterrows():
-                    if row['poly_union'].contains(shapely_point):
-                        image_polygons_df.at[index, f'res_{resolution}'] +=1
-                        # row[f'res_{resolution}'] +=1
-
-                polygons_df = pd.concat([polygons_df, image_polygons_df], ignore_index=True)
-                points_df = pd.concat([points_df, point_df], ignore_index=True)
+    example_json_path = points_jsons_paths_list[0]
+    with open(example_json_path) as file:
+        example_json_data = json.load(file)
 
 
 
-            # save_image_with_tags(polygons_list, image_id, annotators, point_data_dict['shapely_point'].values, image_data)
-
-
-    # polygons_df.to_csv(os.path.join(DATA_DIR, "resolution_limitation_tags_dataframe_3.csv"))
-    points_df.to_csv(os.path.join(DATA_DIR, "resolution_limitation_points_tags_df_6.csv"))
-    print(f"point counter = {points_counter}")
     print("Done.")
 
 
@@ -455,43 +344,137 @@ if __name__ == "__main__":
 
 
 
-# WORKS FOR SURE!
 
-    # for image_id in points_task_image_ids_list:
+
+
+
+
+
+
+
+
+
+
+    # # DOWNLOAD ANNOTATIONS
+
+    # POINTS_DATASET_NAME = "anafa_2023_07_17_infestation_21_images"
+    # POINTS_TASK_NAME = 'anafa_2023_07_17_infestation_21_images'
+    # POINTS_VERSION = 0
+
+    # download_datasets_annotations_from_dataloop(POINTS_DATASET_NAME, POINTS_TASK_NAME, POINTS_VERSION)
+    # points_jsons_paths_list = get_jsons_paths_list(POINTS_DATASET_NAME, POINTS_TASK_NAME, POINTS_VERSION, sub_folder="resized_images")
+    # points_task = project.tasks.get(task_name=POINTS_TASK_NAME)
+
+
+    # # BOX TAGS
+
+    # BOXES_DATASET_NAME = "anafa_2023_06_23_resolution_lim_dataset_1"
+    # BOXES_TASK_NAME = 'anafa_2023_06_23_resolution_lim_first_task_01'
+    # BOXES_VERSION = 0
+
+    # # download_datasets_annotations_from_dataloop(BOXES_DATASET_NAME, BOXES_TASK_NAME, BOXES_VERSION)
+    # boxes_jsons_paths_list = get_jsons_paths_list(POLYGONS_DATASET_NAME, POLYGONS_VERSION)
+    # polygons_task = project.tasks.get(task_name=POLYGONS_TASK_NAME)
+
+
+    # points_task_image_ids_list = np.unique([int(os.path.basename(p).split("_")[0]) for p in points_jsons_paths_list])
+
+    # problematic_images_list = [7851797, 8908805, 9104069, 9104165, 6238883, 6239082]
+    # points_task_image_ids_list = points_task_image_ids_list[~np.isin(points_task_image_ids_list, problematic_images_list)]
+
+
+    # filtered_polygons_jsons_paths_list = [elem for elem in polygons_jsons_paths_list if any(str(id_) in os.path.basename(elem) for id_ in points_task_image_ids_list)]
+
+    # print(f"len points_jsons_paths_list:{len(points_jsons_paths_list)}, len polygons_jsons_paths_list: {len(polygons_jsons_paths_list)}, len filtered_polygons_jsons_paths_list: {len(filtered_polygons_jsons_paths_list)}")
+
+    # # points_task_image_ids_list = [6580458, 9445268]
+    # # points_task_image_ids_list = [9638024]
+
+    # original_image_width, original_image_height = get_original_image_shape()
+    # resolutions_list = get_resolutions_list_from_points_jsons(points_jsons_paths_list)
+
+    # images_data = pd.read_csv(os.path.join(DATA_DIR, 'resolution_test', 'resolution_test_images_dataframe_1000_images_full_data_1.csv'))
+
+    # polygons_df = pd.DataFrame()
+
+    # points_df =pd.DataFrame()
+    # points_counter = 0
+    # for image_id in tqdm(points_task_image_ids_list):
     #     print(image_id)
-    #     points_tags_json = [path for path in points_jsons_paths_list if str(image_id) in path][0]
+
+    #     # POLYGONS
     #     polygons_tags_json = [path for path in polygons_jsons_paths_list if str(image_id) in path][0]
-
-    #     with open(points_tags_json) as file:
-    #         points_json_data = json.load(file)
-
     #     with open(polygons_tags_json) as file:
     #         polygons_json_data = json.load(file)
 
-    #     # POLYGONS
     #     image_polygons_list, annotators = get_polygons_list_from_json_data(polygons_json_data)
-    #     image_polygons_df = create_polygons_df(image_polygons_list, image_id, annotators)
-    #     polygons_df = pd.concat([polygons_df, image_polygons_df], ignore_index=True)
+    #     image_data = images_data[images_data['imageID']==image_id]
+    #     image_polygons_df = create_polygons_df(image_polygons_list, image_id, annotators, image_data)
+
+    #     if len(image_polygons_df) == 0:
+    #         continue
+
+    #     for res in resolutions_list:
+    #         image_polygons_df[f'res_{res}'] = 0
+
 
     #     # POINTS
-    #     width = points_json_data['metadata']['system']['width']
-    #     height = points_json_data['metadata']['system']['height']
-    #     width_factor = original_image_width / width
-    #     height_factor = original_image_height / height
+    #     points_tags_jsons_list = [path for path in points_jsons_paths_list if str(image_id) in path]
+    #     for points_tags_json in points_tags_jsons_list:
+    #         with open(points_tags_json) as file:
+    #             points_json_data = json.load(file)
 
-    #     points_list = []
-    #     for i in range(len(points_json_data['annotations'])):
-    #         x_value = int(points_json_data['annotations'][i]['coordinates']['x']) * width_factor
-    #         y_value = int(points_json_data['annotations'][i]['coordinates']['y']) * height_factor
+    #         resolution = float(os.path.basename(points_tags_json).replace(".json", "").split("_")[-1])
+    #         flight_height = int(os.path.basename(points_tags_json).replace(".json", "").split("_")[3])
 
-    #         shapely_point = Point(x_value, y_value)
-    #         points_list.append(shapely_point)
+    #         # image_polygons_df[f'res_{resolution}'] = 0
 
-    #         is_inside = [poly.contains(shapely_point) for poly in polygons_df['poly_union']]
-    #         is_included = np.any(is_inside)
+    #         width = points_json_data['metadata']['system']['width']
+    #         height = points_json_data['metadata']['system']['height']
+    #         width_factor = original_image_width / width
+    #         height_factor = original_image_height / height
 
-    #     # save_image_with_tags(polygons_list, image_id, annotators, points_list, image_data)
+    #         for i in range(len(points_json_data['annotations'])):
+    #             points_counter += 1
+    #             x_value = int(points_json_data['annotations'][i]['coordinates']['x']) * width_factor
+    #             y_value = int(points_json_data['annotations'][i]['coordinates']['y']) * height_factor
 
+    #             shapely_point = Point(x_value, y_value)
+
+    #             is_included = np.any([poly.contains(shapely_point) for poly in image_polygons_df['poly_union']])
+    #             if is_included == False:
+    #                 distance_to_closest_polygon = min([shapely_point.distance(poly) for poly in image_polygons_df['poly_union']])
+    #             else:
+    #                 distance_to_closest_polygon = 0
+
+    #             point_data_dict = {'image_id': image_id,
+    #                                'shapely_point': shapely_point,
+    #                                'resolution': resolution,
+    #                                'is_included': is_included,
+    #                                'distance_to_closest_polygon': distance_to_closest_polygon}
+
+    #             point_df = pd.DataFrame(columns = ['image_id', 'shapely_point', 'resolution', 'is_included', 'distance_to_closest_polygon'])
+    #             point_df = point_df.append(point_data_dict, ignore_index=True)
+
+
+    #             matching_polygon = [poly for poly in image_polygons_df['poly_union'] if poly.contains(shapely_point)]
+    #             for index, row in image_polygons_df.iterrows():
+    #                 if row['poly_union'].contains(shapely_point):
+    #                     image_polygons_df.at[index, f'res_{resolution}'] +=1
+    #                     # row[f'res_{resolution}'] +=1
+
+    #             polygons_df = pd.concat([polygons_df, image_polygons_df], ignore_index=True)
+    #             points_df = pd.concat([points_df, point_df], ignore_index=True)
+
+
+
+    #         # save_image_with_tags(polygons_list, image_id, annotators, point_data_dict['shapely_point'].values, image_data)
+
+
+    # # polygons_df.to_csv(os.path.join(DATA_DIR, "resolution_limitation_tags_dataframe_3.csv"))
+    # points_df.to_csv(os.path.join(DATA_DIR, "resolution_limitation_points_tags_df_6.csv"))
+    # print(f"point counter = {points_counter}")
+    # print("Done.")
 
 
 
