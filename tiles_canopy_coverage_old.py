@@ -53,11 +53,6 @@ def calculate_canopy_percentage(index_canopy_map, hsv_canopy_map):
     return hsv_canopy_percent, canopy_index_percent
 
 
-def choose_canopy_map(index_canopy_map, hsv_canopy_map):
-    hsv_canopy_percent, canopy_index_percent = calculate_canopy_percentage(index_canopy_map, hsv_canopy_map)
-
-    return
-
 
 def save_histograms(hsv_canopy_percent_list, canopy_index_percent_list, dir="data"):
     data_lists = {"hsv_percent_list": hsv_canopy_percent_list,
@@ -167,5 +162,35 @@ if __name__ == "__main__":
 # crop image
 # calculate canopy value for each tile
 # save csv with tile details, including coordinates, image_id and canopy value
+
+
+
+
+    # def create_tiles_canopy_cover_csv(self):
+    #     box_dicts_list = []
+    #     for image_id in tqdm(self.image_ids_list):
+    #         im_path = self.env.download_image(int(image_id))
+    #         image = skio.imread(im_path)
+    #         index_canopy_map, hsv_canopy_map = self.get_canopy_cover_maps(image, im_path)
+    #         image_hsv_canopy_percent, image_canopy_index_percent = self.calculate_canopy_percentage(index_canopy_map, hsv_canopy_map)
+    #         order_id = self.env.eti_api.get_images_order_ids([image_id])[0]
+    #         for idx, box in enumerate(self.boxes_coords, start=1):
+    #             left, top, right, bottom = box.bounds
+    #             cropped_canopy_index_map = index_canopy_map[int(left):int(right), int(top):int(bottom)]
+    #             cropped_canopy_hsv_map = hsv_canopy_map[int(left):int(right), int(top):int(bottom)]
+    #             box_hsv_canopy_percent, box_canopy_index_percent = self.calculate_canopy_percentage(cropped_canopy_index_map, cropped_canopy_hsv_map)
+    #             avg = int(sum([box_hsv_canopy_percent, box_canopy_index_percent])/2)
+    #             box_dict = {'image_id': image_id,
+    #                         'box_index': idx,
+    #                         'orderID': order_id,
+    #                         'image_hsv_canopy_percent': image_hsv_canopy_percent,
+    #                         'image_canopy_index_percent': image_canopy_index_percent,
+    #                         'box_coords': box,
+    #                         'hsv_canopy_percent': box_hsv_canopy_percent,
+    #                         'index_canopy_percent': box_canopy_index_percent,
+    #                         'canopy_cover_avg': avg}
+    #             box_dicts_list.append(box_dict)
+    #     self.boxes_df = pd.DataFrame(box_dicts_list)
+    #     self.boxes_df.to_csv(self.output_csv_path, index=False)
 
 

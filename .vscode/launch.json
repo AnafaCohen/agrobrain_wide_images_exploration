@@ -20,12 +20,13 @@
             "args": [
                 // "--order_ids=[405497, 404108]",
                 "--wide_image_ids_list=[9134832, 8722161]",
-                "--wide_image_ids_json_path=data/infestation_1000_image_ids.json",
+                // "--wide_image_ids_json_path=data/infestation_1000_image_ids.json",
+                "--wide_image_ids_json_path=data/infestation_365_images_from_3_orders.json",
                 // "--wide_image_ids_json_path=",
                 // "--wide_image_ids_list=[8484421, 7876108, 4956894, 6859096, 7014238, 7490734, 7712145, 8722161, 9134832]",
                 // "--wide_image_ids=[8722161, 9134832]",
                 // "--zom_image_ids=[8471755, 7875316]",
-                "--output_csv_path=data/canopy_coverage/tiles_canopy_coverage_1000_images_full.csv"
+                // "--output_csv_path=data/canopy_coverage/tiles_canopy_coverage_output_365_images_from_3_orders.csv"
             ],
             "cwd": "${workspaceFolder}",
             "env": {
@@ -43,10 +44,10 @@
             "args": [
                 // "--wide_image_ids=[9134832, 8722161]",
                 // "--wide_image_ids_json_path=data/infestation_1000_image_ids.json",
-                "--input_tiles_csv_path=data/canopy_coverage/tiles_canopy_coverage_1000_images.csv",
-                "--output_tiles_csv_path=data/canopy_coverage/tiles_infestation_level_1000_images_try.csv",
-                "--data_dir=data/canopy_coverage",
-                "--model_name=canopy_index_and_hsv",
+                "--input_tiles_csv_path=data/canopy_coverage/tiles_canopy_coverage_output_365_images_from_3_orders.csv",
+                "--output_tiles_csv_path=data/canopy_coverage/tiles_infestation_coverage_output_365_images_from_3_orders.csv",
+                // "--data_dir=data/canopy_coverage",
+                // "--model_name=canopy_index_and_hsv",
             ],
             "cwd": "${workspaceFolder}",
             "env": {
@@ -62,9 +63,10 @@
             "request": "launch",
             "program": "${workspaceFolder}/infestation_coverage_checkup.py",
             "args": [
-                "--infestation_level_csv_path=data/canopy_coverage/tiles_canopy_coverage_1000_images.csv",
-                "--output_path=data/canopy_coverage",
-                "--dl_annotations_dataset_name=anafa_2023_07_17_infestation_21_images",
+                "--infestation_level_csv_path=data/canopy_coverage/tiles_infestation_coverage_output_365_images_from_3_orders.csv",
+                "--output_path=data/canopy_coverage/365_images_from_3_orders",
+                "--dl_annotations_dataset_name=",
+                // "--dl_annotations_dataset_name=anafa_tagging_methodology_1000_images_2023_07_24",
                 "--dl_local_data_dir=data/dataloop"
 
             ],

@@ -14,6 +14,7 @@ from agrobrain_canopy.canopy_cover.canopy_cover import CanopyCover
 import glob
 from skimage import io
 from shapely.geometry import Point, Polygon
+from skimage.util import crop
 
 import json
 import glob
@@ -105,17 +106,17 @@ def get_box_label_and_infestation_avg(box_df, labels):
     no_weeds_rows = box_labels[box_labels['label'].str.contains("No")].index
 
     if len(infestation_rows) > len(no_weeds_rows):
-        infestation_avarage = get_infestation_avg(labels.iloc[infestation_rows]['label'])
+        infestation_average = get_infestation_avg(labels.iloc[infestation_rows]['label'])
         box_final_label = labels.iloc[infestation_rows]['label'].value_counts().idxmax()
         votes = labels.iloc[infestation_rows]['label'].value_counts().max()
     else:
         box_final_label = labels.iloc[no_weeds_rows]['label'].value_counts().idxmax()
         votes = labels.iloc[no_weeds_rows]['label'].value_counts().max()
         if len(infestation_rows) > 0:
-            infestation_avarage = get_infestation_avg(labels.iloc[infestation_rows]['label'])
+            infestation_average = get_infestation_avg(labels.iloc[infestation_rows]['label'])
         else:
-            infestation_avarage = 0
-    return box_final_label, infestation_avarage, votes
+            infestation_average = 0
+    return box_final_label, infestation_average, votes
 
 def get_box_canopy_info(box_coordinates, index_canopy_image, hsv_canopy_image):
     x_values = [coord['x'] for coord in box_coordinates]
@@ -143,59 +144,51 @@ if __name__ == "__main__":
 
     # DOWNLOAD ANNOTATIONS
 
-    ANNOTATIONS_DATASET_NAME = "anafa_2023_07_17_infestation_21_images"
+    # ANNOTATIONS_DATASET_NAME = "anafa_2023_07_17_infestation_21_images"
+    ANNOTATIONS_DATASET_NAME = "anafa_tagging_methodology_1000_images_2023_07_24"
+    # download_datasets_annotations_from_dataloop(ANNOTATIONS_DATASET_NAME)
 
-    # download_datasets_annotations_from_dataloop(POINTS_DATASET_NAME)
+
     annotations_jsons_paths_list = get_jsons_paths_list(ANNOTATIONS_DATASET_NAME)
 
-    label_colors_dict = {
-        f'No weeds': 'red',
-        f'Infestation.Up_to_10%': 'palegreen',
-        f'Infestation.10%-25%': 'mediumseagreen',
-        f'Infestation.25%-50%': 'seagreen',
-        f'Infestation.50%-75%': 'green',
-        f'Infestation.above_75%': 'darkgreen',
-
-        f'Large_weeds.1-5': 'pink',
-        f'Large_weeds.6-10': 'hotpink',
-        f'Large_weeds.10+': 'deeppink',
-
-        f'Small_weeds.Up_to_10': 'khaki',
-        f'Small_weeds.above_10': 'gold'
-        }
 
     # PRINT RANDOM IMAGE WITH ANNOTATIONS
 
-    json_path = np.random.choice(annotations_jsons_paths_list)
-    with open(json_path) as file:
-        json_data = json.load(file)
+    dl_annotations_df = pd.DataFrame()
+    for json_path in tqdm(annotations_jsons_paths_list, leave=False):
+        # json_path = np.random.choice(annotations_jsons_paths_list)
+        with open(json_path) as file:
+            json_data = json.load(file)
 
-    im_id = int(os.path.basename(json_path).replace(".json",""))
-    im_path = env.download_image(int(im_id))
-    image = io.imread(im_path)
-    print(f"calculating image {im_id} index canopy map...")
-    index_canopy_image = CanopyCover.canopy_cover(im_path)[0].astype(np.uint8) * 255
-    print(f"calculating image {im_id} hsv canopy map...")
-    hsv_canopy_image = canopy_by_hsv(image).astype(np.uint8) * 255
+        im_id = int(os.path.basename(json_path).replace(".json",""))
+        im_path = env.download_image(int(im_id))
+        image = io.imread(im_path)
+        print(f"calculating image {im_id} index canopy map...")
+        index_canopy_image = CanopyCover.canopy_cover(im_path)[0].astype(np.uint8) * 255
+        print(f"calculating image {im_id} hsv canopy map...")
+        hsv_canopy_image = canopy_by_hsv(image).astype(np.uint8) * 255
 
 
-    label_types = [json_data['annotations'][i]['label'] for i in range(len(json_data['annotations']))]
-    boxes = pd.DataFrame([json_data['annotations'][i] for i in range(len(json_data['annotations'])) if json_data['annotations'][i]['label'] == 'annotation box']).reset_index(drop=True)
-    labels = pd.DataFrame([json_data['annotations'][i] for i in range(len(json_data['annotations'])) if json_data['annotations'][i]['label'] != 'annotation box']).reset_index(drop=True)
-    boxes = add_poly_box(boxes)
-    boxes = fit_points_to_boxes(boxes, labels)
+        label_types = [json_data['annotations'][i]['label'] for i in range(len(json_data['annotations']))]
+        boxes = pd.DataFrame([json_data['annotations'][i] for i in range(len(json_data['annotations'])) if json_data['annotations'][i]['label'] == 'annotation box']).reset_index(drop=True)
+        labels = pd.DataFrame([json_data['annotations'][i] for i in range(len(json_data['annotations'])) if json_data['annotations'][i]['label'] != 'annotation box']).reset_index(drop=True)
+        boxes = add_poly_box(boxes)
+        boxes = fit_points_to_boxes(boxes, labels)
 
-    boxes["box_final_label"] = None
-    boxes["infestation_avarage"] = None
-    for i, box_row in tqdm(boxes.iterrows()):
-        box_final_label, infestation_avarage, votes = get_box_label_and_infestation_avg(box_row, labels)
-        boxes.at[i, "box_final_label"] = box_final_label
-        boxes.at[i, "infestation_avarage"] = infestation_avarage
-        boxes.at[i, "votes"] = votes
-        box_hsv_canopy_sum, box_hsv_canopy_percent, box_canopy_index_sum, box_canopy_index_percent, box_canopy_avg_hsv_index_sum = get_box_canopy_info(box_row['coordinates'], index_canopy_image, hsv_canopy_image)
-        boxes.at[i, "box_hsv_canopy_sum"] = box_hsv_canopy_sum
-        boxes.at[i, "box_hsv_canopy_percent"] = box_hsv_canopy_percent
-        boxes.at[i, "box_canopy_index_sum"] = box_canopy_index_sum
-        boxes.at[i, "box_canopy_index_percent"] = box_canopy_index_percent
-        boxes.at[i, "box_canopy_avg_hsv_index_sum"] = box_canopy_avg_hsv_index_sum
-
+        boxes["box_final_label"] = None
+        boxes["infestation_average"] = None
+        for i, box_row in tqdm(boxes.iterrows()):
+            box_final_label, infestation_average, votes = get_box_label_and_infestation_avg(box_row, labels)
+            boxes.at[i, "box_final_label"] = box_final_label
+            boxes.at[i, "infestation_average"] = infestation_average
+            boxes.at[i, "votes"] = votes
+            box_hsv_canopy_sum, box_hsv_canopy_percent, box_canopy_index_sum, box_canopy_index_percent, box_canopy_avg_hsv_index_sum = get_box_canopy_info(box_row['coordinates'], index_canopy_image, hsv_canopy_image)
+            boxes.at[i, "box_hsv_canopy_sum"] = box_hsv_canopy_sum
+            boxes.at[i, "box_hsv_canopy_percent"] = box_hsv_canopy_percent
+            boxes.at[i, "box_canopy_index_sum"] = box_canopy_index_sum
+            boxes.at[i, "box_canopy_index_percent"] = box_canopy_index_percent
+            boxes.at[i, "box_canopy_avg_hsv_index_sum"] = box_canopy_avg_hsv_index_sum
+        boxes['image_id'] = im_id
+        dl_annotations_df = pd.concat([dl_annotations_df, boxes], ignore_index=True)
+    dl_annotations_df.to_csv(f"data/infestation_coverage/dataloop_annotations_boxes_dataset_{ANNOTATIONS_DATASET_NAME}.csv")
+    print("Done.")
