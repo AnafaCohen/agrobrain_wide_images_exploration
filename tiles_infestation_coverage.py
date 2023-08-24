@@ -1,49 +1,95 @@
-import os
-import numpy as np
 import pandas as pd
+import numpy as np
 import argparse
-import skimage.io as skio
 from datetime import datetime
-from tqdm import tqdm
-import json
-import matplotlib.pyplot as plt
-from shapely.geometry import box
-from skimage.draw import polygon
-from shapely import wkt
 
-from agrobrain_image_processing.canopy.canopy import canopy_by_hsv
-from agrobrain_canopy.canopy_cover.canopy_cover import CanopyCover
+
 from agrobrain_apis.data_store.data_store import DataStoreAPI
 
-
+MEAN_DIFF = 10
+CANOPY_MODEL_NAMES_MAP = {0: 'hsv', 1: 'index'}
 class Infestation_Heatmap_Creator():
     def __init__(self,
-                 input_tiles_csv_path,
-                 output_tiles_csv_path,
-                #  canopy_experiment_name,
-                 save_output_csv = True):
-        self.input_tiles_csv_path = input_tiles_csv_path
-        self.input_tiles_df = pd.read_csv(self.input_tiles_csv_path)
+                 infestation_algo_name,
+                 infestation_experiment_name,
+                 canopy_algo_name,
+                 canopy_experiment_name,
+                 store_output=True):
+        self.infestation_algo_name = infestation_algo_name
+        self.infestation_experiment_name = infestation_experiment_name,
+        self.canopy_algo_name = canopy_algo_name
+        self.canopy_experiment_name=canopy_experiment_name
+        self.store_output = store_output
+        self.canopy_models = CANOPY_MODEL_NAMES_MAP
+        self.tiles_canopy_coverage_df = self.get_tiles_canopy_coverage_data()
         self.orders_df = self.create_orders_df()
-        self.output_tiles_csv_path = output_tiles_csv_path
-        self.output_tiles_df = None
-        self.save_output_csv = save_output_csv
-        self.output_tiles_df = None
-        self.canopy_experiment_name="infestation_by_canopy_coverage_v0"
+        self.images_dataframes_dict = self.create_images_dataframes_dict()
+        self.datetime_now = self.get_datetime_now()
+
+    def get_datetime_now(self):
+        return datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
 
-    def get_boxes_canopy_coverage_data(self, image_id):
+    def create_images_dataframes_dict(self):
+        unique_image_ids = np.unique(self.tiles_canopy_coverage_df['image_id'])
+        images_dataframes_dict = {}
+        for image_id in unique_image_ids:
+            image_df = self.tiles_canopy_coverage_df[self.tiles_canopy_coverage_df['image_id']==image_id].reset_index(drop=True)
+            order_id = image_df['orderID'][0]
+            image_index_canopy_percent = image_df.reset_index(drop=True)['image_canopy_index_percent'][0]
+            image_hsv_canopy_percent = image_df.reset_index(drop=True)['image_hsv_canopy_percent'][0]
+            image_chosen_canopy_model = self.choose_image_canopy_model(image_index_canopy_percent, image_hsv_canopy_percent, order_id)
+            image_df['canopy_model'] = image_chosen_canopy_model
+            images_dataframes_dict[image_id] = image_df
+        return images_dataframes_dict
+
+
+    def choose_image_canopy_model(self, image_index_canopy_percent, image_hsv_canopy_percent, order_id):
+        order_hsv_mean = self.orders_df[self.orders_df['orderID']==order_id]['order_hsv_mean'].reset_index(drop=True)[0]
+        order_index_mean = self.orders_df[self.orders_df['orderID']==order_id]['order_index_mean'].reset_index(drop=True)[0]
+        if abs(image_index_canopy_percent - image_hsv_canopy_percent) < MEAN_DIFF:
+            return self.canopy_models[0]
+        elif abs(image_index_canopy_percent - order_index_mean) < abs(image_hsv_canopy_percent - order_hsv_mean):
+            return self.canopy_models[1]
+        else:
+            return self.canopy_models[0]
+
+
+    def get_tiles_canopy_coverage_data(self):
         data_api = DataStoreAPI()
-        for i, box in self.boxes_df.iterrows():
-            data_api.store("infestation_wide_images", payload=box.to_dict(), image_id=image_id, experiment=self.experiment_name, metadata={"timestamp": self.datetime_now})
+        all_images_canopy_data = []
+        canopy_stored_data_list = data_api.list(self.canopy_algo_name, experiment=self.canopy_experiment_name)
+        image_ids_list =[int(canopy_stored_data_list[i]['object']['image_id']) for i in range(len(canopy_stored_data_list))]
+        for image_id in image_ids_list:
+            image_id_data = data_api.get(self.canopy_algo_name, experiment=self.canopy_experiment_name, image_id=image_id)
+            all_images_canopy_data.extend(image_id_data)
+        canopy_data_df = pd.DataFrame(all_images_canopy_data)
+        return canopy_data_df
 
 
-    def create_output_tiles_df(self):
-        self.output_tiles_df = self.input_tiles_df.copy()
-        self.output_tiles_df['infestation_level_by_mean_subtraction'] = self.output_tiles_df.apply(self.predict_tile_infestation_level_mean_subtraction, axis=1)
-        self.output_tiles_df['infestation_level_by_histograms_heuristics'] = self.output_tiles_df.apply(self.predict_tile_infestation_level_histograms_heuristics, axis=1)
-        if self.save_output_csv:
-            self.output_tiles_df.to_csv(self.output_tiles_csv_path)
+    def predict_tiles_infestation_level(self):
+        for image_id, image_df in self.images_dataframes_dict.items():
+            image_df['pred_infestation_level_by_mean_subtraction'] = image_df.apply(self.predict_tile_infestation_level_mean_subtraction, axis=1)
+            image_df['pred_tile_infestation_level_per_image'] = image_df.apply(self.pred_tile_infestation_level_per_image, axis=1)
+            self.store_image_output_in_db(image_id,image_df)
+        # self.store_output_in_db()
+
+
+    def store_image_output_in_db(self, image_id, image_tiles_df):
+        data_api = DataStoreAPI()
+        data_api.store(self.infestation_algo_name, payload=image_tiles_df.to_dict(), image_id=image_id, experiment=self.infestation_experiment_name, metadata={"timestamp": self.datetime_now})
+        # CHECKUPS:
+        # data_api.list(self.infestation_algo_name, experiment=self.infestation_experiment_name, metadata={"timestamp": self.datetime_now})
+        # len(data_api.list(self.infestation_algo_name, experiment=self.infestation_experiment_name, metadata={"timestamp": self.datetime_now}))
+        # data_api.get(self.infestation_algo_name, experiment=self.infestation_experiment_name, metadata={"timestamp": self.datetime_now})
+
+
+
+    def store_output_in_db(self):
+        data_api = DataStoreAPI()
+        for image_id in self.images_dataframes_dict:
+            image_tiles_df = self.images_dataframes_dict[image_id]
+            data_api.store(self.infestation_algo_name, payload=image_tiles_df.to_dict(), image_id=image_id, experiment=self.infestation_experiment_name, metadata={"timestamp": self.datetime_now})
 
 
     def group_df_by_orders(self, input_tiles_df):
@@ -59,10 +105,10 @@ class Infestation_Heatmap_Creator():
         return hsv_mean, hsv_std, index_mean, index_std
 
     def create_orders_df(self):
-        df_grouped_by_orders = self.group_df_by_orders(self.input_tiles_df)
+        df_grouped_by_orders = self.group_df_by_orders(self.tiles_canopy_coverage_df)
         all_orders_list = []
         for order_id, group_indices in df_grouped_by_orders.groups.items():
-            order_df = self.input_tiles_df.loc[group_indices]
+            order_df = self.tiles_canopy_coverage_df.loc[group_indices]
             hsv_mean, hsv_std, index_mean, index_std = self.get_order_canopy_stats(order_df)
             canopy_mean_value = order_df['canopy_cover_avg'].mean()
             order_out = {
@@ -79,29 +125,22 @@ class Infestation_Heatmap_Creator():
     def predict_tile_infestation_level_mean_subtraction(self, row):
         orders_canopy_mean_value = self.orders_df[self.orders_df['orderID'] == row['orderID']]['order_canopy_mean'].values[0]
         label = row['canopy_cover_avg'] - orders_canopy_mean_value
-        return int(label)
+        return {'canopy_model': 'mean_subtruction', 'canopy_percent': int(label)}
 
-    def predict_tile_infestation_level_histograms_heuristics(self, row, zero_value=5, mean_distance=10):
-        orders_canopy_hsv_mean = self.orders_df[self.orders_df['orderID'] == row['orderID']]['order_hsv_mean'].values[0]
-        orders_canopy_hsv_std = self.orders_df[self.orders_df['orderID'] == row['orderID']]['order_hsv_std'].values[0]
-        orders_canopy_index_mean = self.orders_df[self.orders_df['orderID'] == row['orderID']]['order_index_mean'].values[0]
-        orders_canopy_index_std = self.orders_df[self.orders_df['orderID'] == row['orderID']]['order_index_std'].values[0]
-        if orders_canopy_hsv_mean <= zero_value and orders_canopy_index_mean <= zero_value:
-            return 0
-        elif orders_canopy_hsv_mean <= zero_value and orders_canopy_index_mean > zero_value:
-            return row['index_canopy_percent']
-        elif orders_canopy_hsv_mean > zero_value and orders_canopy_index_mean <= zero_value:
-            return row['hsv_canopy_percent']
-        elif abs(orders_canopy_hsv_mean - orders_canopy_index_mean) <= mean_distance:
-            return (row['index_canopy_percent'] + row['hsv_canopy_percent'])/2
-        else:
-            return max(row['index_canopy_percent'], row['hsv_canopy_percent'])
+
+    def pred_tile_infestation_level_per_image(self, row):
+        canopy_model = self.images_dataframes_dict[row['image_id']]['canopy_model'].values[0]
+        canopy_percent = row[f"{canopy_model}_canopy_percent"]
+        return {'canopy_model': canopy_model, 'canopy_percent': canopy_percent}
 
 
 def get_run_arguments():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input_tiles_csv_path", type=str)
-    parser.add_argument("--output_tiles_csv_path", type=str)
+    parser.add_argument("--infestation_algo_name", type=str)
+    parser.add_argument("--canopy_algo_name", type=str)
+    parser.add_argument("--canopy_experiment_name", type=str)
+    parser.add_argument("--infestation_experiment_name", type=str)
+
     args = parser.parse_args()
     return args
 
@@ -109,9 +148,10 @@ def get_run_arguments():
 if __name__ == "__main__":
     args = get_run_arguments()
 
-    infestation_heatmap_creator = Infestation_Heatmap_Creator(input_tiles_csv_path = args.input_tiles_csv_path,
-                                                              output_tiles_csv_path = args.output_tiles_csv_path,
-                                                              save_output_csv = True)
-    infestation_heatmap_creator.create_output_tiles_df()
+    infestation_heatmap_creator = Infestation_Heatmap_Creator(infestation_algo_name = args.infestation_algo_name,
+                                                              infestation_experiment_name = args.infestation_experiment_name,
+                                                              canopy_algo_name = args.canopy_algo_name,
+                                                              canopy_experiment_name = args.canopy_experiment_name)
+    infestation_heatmap_creator.predict_tiles_infestation_level()
 
     print("Done.")

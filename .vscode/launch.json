@@ -18,15 +18,12 @@
             "request": "launch",
             "program": "${workspaceFolder}/tiles_canopy_coverage.py",
             "args": [
-                // "--order_ids=[405497, 404108]",
                 "--wide_image_ids_list=[9134832, 8722161]",
-                // "--wide_image_ids_json_path=data/infestation_1000_image_ids.json",
-                "--wide_image_ids_json_path=data/infestation_365_images_from_3_orders.json",
-                // "--wide_image_ids_json_path=",
-                // "--wide_image_ids_list=[8484421, 7876108, 4956894, 6859096, 7014238, 7490734, 7712145, 8722161, 9134832]",
-                // "--wide_image_ids=[8722161, 9134832]",
-                // "--zom_image_ids=[8471755, 7875316]",
-                // "--output_csv_path=data/canopy_coverage/tiles_canopy_coverage_output_365_images_from_3_orders.csv"
+                "--wide_image_ids_json_path=data/infestation_6_images_from_3_orders.json",
+                // "--wide_image_ids_json_path=data/infestation_365_images_from_3_orders.json",
+
+                "--canopy_algo_name=canopy_wide_images",
+                "--experiment_name=canopy_coverage_v4"
             ],
             "cwd": "${workspaceFolder}",
             "env": {
@@ -42,12 +39,10 @@
             "request": "launch",
             "program": "${workspaceFolder}/tiles_infestation_coverage.py",
             "args": [
-                // "--wide_image_ids=[9134832, 8722161]",
-                // "--wide_image_ids_json_path=data/infestation_1000_image_ids.json",
-                "--input_tiles_csv_path=data/canopy_coverage/tiles_canopy_coverage_output_365_images_from_3_orders.csv",
-                "--output_tiles_csv_path=data/canopy_coverage/tiles_infestation_coverage_output_365_images_from_3_orders.csv",
-                // "--data_dir=data/canopy_coverage",
-                // "--model_name=canopy_index_and_hsv",
+                "--infestation_algo_name=infestation_predictions_tiles_wide_images",
+                "--infestation_experiment_name=v4",
+                "--canopy_algo_name=canopy_wide_images",
+                "--canopy_experiment_name=canopy_coverage_v4"
             ],
             "cwd": "${workspaceFolder}",
             "env": {

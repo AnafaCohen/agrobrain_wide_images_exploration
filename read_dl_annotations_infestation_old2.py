@@ -131,21 +131,12 @@ def get_box_canopy_info(box_coordinates, index_canopy_image, hsv_canopy_image):
     return box_hsv_canopy_sum, box_hsv_canopy_percent, box_canopy_index_sum, box_canopy_index_percent, box_canopy_avg_hsv_index_sum
 
 
-def create_boxes_df(json_data):
-    boxes_df = pd.DataFrame([json_data['annotations'][i] for i in range(len(json_data['annotations'])) if json_data['annotations'][i]['label'] == 'annotation box']).reset_index(drop=True)
-    labels_df = pd.DataFrame([json_data['annotations'][i] for i in range(len(json_data['annotations'])) if json_data['annotations'][i]['label'] != 'annotation box']).reset_index(drop=True)
-    boxes_df = add_poly_box(boxes_df)
-    boxes_df = fit_points_to_boxes(boxes_df, labels_df)
-    # CONTINUE HERE
-    return boxes_df
-
-
 if __name__ == "__main__":
     DATA_DIR = "data"
 
     project = dl.projects.get(project_name='Taranis AI Annotation Projects')
 
-    ### DOWNLOAD ANNOTATIONS ###
+    # DOWNLOAD ANNOTATIONS
 
     # ANNOTATIONS_DATASET_NAME = "anafa_2023_07_17_infestation_21_images"
     ANNOTATIONS_DATASET_NAME = "anafa_tagging_methodology_1000_images_2023_07_24"
@@ -155,25 +146,43 @@ if __name__ == "__main__":
     annotations_jsons_paths_list = get_jsons_paths_list(ANNOTATIONS_DATASET_NAME)
 
 
-    ### CREATE CSV FOR INFESTATION ANNOTATIONS ###
+    # PRINT RANDOM IMAGE WITH ANNOTATIONS
 
-    dl_annotations_dict = {}
+    dl_annotations_df = pd.DataFrame()
     for json_path in tqdm(annotations_jsons_paths_list, leave=False):
+        # json_path = np.random.choice(annotations_jsons_paths_list)
         with open(json_path) as file:
             json_data = json.load(file)
+
         im_id = int(os.path.basename(json_path).replace(".json",""))
+        im_path = env.download_image(int(im_id))
+        image = io.imread(im_path)
+        print(f"calculating image {im_id} index canopy map...")
+        index_canopy_image = CanopyCover.canopy_cover(im_path)[0].astype(np.uint8) * 255
+        print(f"calculating image {im_id} hsv canopy map...")
+        hsv_canopy_image = canopy_by_hsv(image).astype(np.uint8) * 255
+
+
         label_types = [json_data['annotations'][i]['label'] for i in range(len(json_data['annotations']))]
-        boxes_df = create_boxes_df(json_data)
+        boxes = pd.DataFrame([json_data['annotations'][i] for i in range(len(json_data['annotations'])) if json_data['annotations'][i]['label'] == 'annotation box']).reset_index(drop=True)
+        labels = pd.DataFrame([json_data['annotations'][i] for i in range(len(json_data['annotations'])) if json_data['annotations'][i]['label'] != 'annotation box']).reset_index(drop=True)
+        boxes = add_poly_box(boxes)
+        boxes = fit_points_to_boxes(boxes, labels)
 
-
-        boxes_df["box_final_label"] = None
-        boxes_df["infestation_average"] = None
-        for i, box_row in tqdm(boxes_df.iterrows()):
+        boxes["box_final_label"] = None
+        boxes["infestation_average"] = None
+        for i, box_row in tqdm(boxes.iterrows()):
             box_final_label, infestation_average, votes = get_box_label_and_infestation_avg(box_row, labels)
-            boxes_df.at[i, "box_final_label"] = box_final_label
-            boxes_df.at[i, "infestation_average"] = infestation_average
-            boxes_df.at[i, "votes"] = votes
-        boxes_df['image_id'] = im_id
-        dl_annotations_df = pd.concat([dl_annotations_df, boxes_df], ignore_index=True)
+            boxes.at[i, "box_final_label"] = box_final_label
+            boxes.at[i, "infestation_average"] = infestation_average
+            boxes.at[i, "votes"] = votes
+            box_hsv_canopy_sum, box_hsv_canopy_percent, box_canopy_index_sum, box_canopy_index_percent, box_canopy_avg_hsv_index_sum = get_box_canopy_info(box_row['coordinates'], index_canopy_image, hsv_canopy_image)
+            boxes.at[i, "box_hsv_canopy_sum"] = box_hsv_canopy_sum
+            boxes.at[i, "box_hsv_canopy_percent"] = box_hsv_canopy_percent
+            boxes.at[i, "box_canopy_index_sum"] = box_canopy_index_sum
+            boxes.at[i, "box_canopy_index_percent"] = box_canopy_index_percent
+            boxes.at[i, "box_canopy_avg_hsv_index_sum"] = box_canopy_avg_hsv_index_sum
+        boxes['image_id'] = im_id
+        dl_annotations_df = pd.concat([dl_annotations_df, boxes], ignore_index=True)
     dl_annotations_df.to_csv(f"data/infestation_coverage/dataloop_annotations_boxes_dataset_{ANNOTATIONS_DATASET_NAME}.csv")
     print("Done.")
